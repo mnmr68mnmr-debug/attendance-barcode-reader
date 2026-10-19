@@ -1,0 +1,119 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>قارئ باركود الحضور</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 30px auto;
+      padding: 20px;
+      text-align: center;
+      background: #f4f7fb;
+      color: #172033;
+    }
+    h2 { color: #174ea6; }
+    #reader {
+      width: 100%;
+      max-width: 450px;
+      margin: 20px auto;
+      background: white;
+    }
+    button {
+      padding: 12px 20px;
+      margin: 8px;
+      border: 0;
+      border-radius: 8px;
+      background: #174ea6;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 16px;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+  <h2>قارئ باركود الحضور</h2>
+  <p>اضغط على الزر للسماح باستخدام الكاميرا.</p>
+  <button id="start">تشغيل الكاميرا</button>
+  <button id="stop">إيقاف الكاميرا</button>
+  <div id="reader"></div>
+  <p id="status">الكاميرا متوقفة.</p>
+  <button id="copy" hidden>نسخ الكود المقروء</button>
+
+  <script>
+    let scanner = null;
+    let running = false;
+    let lastCode = "";
+
+    const status = document.getElementById("status");
+    const copyButton = document.getElementById("copy");
+
+    document.getElementById("start").onclick = async () => {
+      try {
+        if (!window.Html5Qrcode) {
+          status.textContent = "تعذر تحميل مكتبة قارئ الباركود.";
+          return;
+        }
+        if (running) return;
+
+        if (!scanner) {
+          scanner = new Html5Qrcode("reader");
+        }
+
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 150 } },
+          async (text) => {
+            lastCode = text.trim();
+            status.textContent = "تمت قراءة الكود: " + lastCode;
+            copyButton.hidden = false;
+            if (running) {
+              running = false;
+              try { await scanner.stop(); } catch (e) {}
+            }
+          },
+          () => {}
+        );
+
+        running = true;
+        status.textContent = "الكاميرا تعمل. وجّهها نحو الباركود.";
+      } catch (error) {
+        running = false;
+        status.textContent =
+          "تعذر تشغيل الكاميرا: " +
+          (error && error.message ? error.message : String(error));
+      }
+    };
+
+    document.getElementById("stop").onclick = async () => {
+      if (scanner && running) {
+        try {
+          await scanner.stop();
+          running = false;
+          status.textContent = "تم إيقاف الكاميرا.";
+        } catch (error) {
+          status.textContent = "تعذر إيقاف الكاميرا.";
+        }
+      }
+    };
+
+    copyButton.onclick = async () => {
+      if (!lastCode) return;
+      try {
+        await navigator.clipboard.writeText(lastCode);
+        status.textContent = "تم نسخ الكود: " + lastCode;
+      } catch (error) {
+        status.textContent = "الكود المقروء: " + lastCode;
+      }
+    };
+  </script>
+</body>
+</html>
