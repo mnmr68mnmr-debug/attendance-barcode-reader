@@ -4,8 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>قارئ باركود الحضور</title>
+  <title>نظام الحضور بالباركود</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -16,13 +17,16 @@
       background: #f4f7fb;
       color: #172033;
     }
+
     h2 { color: #174ea6; }
+
     #reader {
       width: 100%;
       max-width: 450px;
       margin: 20px auto;
       background: white;
     }
+
     button {
       padding: 12px 20px;
       margin: 8px;
@@ -33,62 +37,104 @@
       font-size: 16px;
       cursor: pointer;
     }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
     #status {
       margin-top: 16px;
       overflow-wrap: anywhere;
+      line-height: 1.8;
+    }
+
+    #codeBox {
+      font-size: 24px;
+      font-weight: bold;
+      color: #174ea6;
+      margin: 15px;
+    }
+
+    #register {
+      background: #188038;
     }
   </style>
 </head>
+
 <body>
-  <h2>قارئ باركود الحضور</h2>
-  <p>اضغط على الزر للسماح باستخدام الكاميرا.</p>
+  <h2>نظام الحضور بالباركود</h2>
+  <p>اضغط على تشغيل الكاميرا، ثم وجّهها نحو الباركود.</p>
+
   <button id="start">تشغيل الكاميرا</button>
   <button id="stop">إيقاف الكاميرا</button>
+
   <div id="reader"></div>
+
   <p id="status">الكاميرا متوقفة.</p>
-  <button id="copy" hidden>نسخ الكود المقروء</button>
+  <div id="codeBox"></div>
+
+  <button id="copy" hidden>نسخ الكود</button>
+  <button id="register" hidden>تسجيل الحضور</button>
 
   <script>
+    // رابط تطبيق الحضور المنشور في Apps Script
+    const APP_URL =
+      "https://script.google.com/macros/s/AKfycbyU9HkbRdXMGz866YpwdmvI8mTHHckchNn9bNvUSRuLEJH4t9JgVkGAp1a1Rv28tTUr/exec";
+
     let scanner = null;
     let running = false;
     let lastCode = "";
+    let processing = false;
 
     const status = document.getElementById("status");
+    const codeBox = document.getElementById("codeBox");
     const copyButton = document.getElementById("copy");
+    const registerButton = document.getElementById("register");
 
     document.getElementById("start").onclick = async () => {
       try {
         if (!window.Html5Qrcode) {
-          status.textContent = "تعذر تحميل مكتبة قارئ الباركود.";
+          status.textContent = "تعذر تحميل قارئ الباركود.";
           return;
         }
+
         if (running) return;
 
         if (!scanner) {
           scanner = new Html5Qrcode("reader");
         }
 
+        status.textContent = "جارٍ تشغيل الكاميرا...";
+
         await scanner.start(
           { facingMode: "environment" },
-         {
-  fps: 10,
-  qrbox: { width: 350, height: 180 },
-  formatsToSupport: [
-    Html5QrcodeSupportedFormats.CODE_128,
-    Html5QrcodeSupportedFormats.CODE_39,
-    Html5QrcodeSupportedFormats.EAN_13,
-    Html5QrcodeSupportedFormats.EAN_8,
-    Html5QrcodeSupportedFormats.ITF,
-    Html5QrcodeSupportedFormats.CODABAR
-  ]
-},
+          {
+            fps: 10,
+            qrbox: { width: 350, height: 180 },
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.CODE_39,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.ITF,
+              Html5QrcodeSupportedFormats.CODABAR
+            ]
+          },
           async (text) => {
-            lastCode = text.trim();
-            status.textContent = "تمت قراءة الكود: " + lastCode;
+            if (processing) return;
+
+            lastCode = text.trim().toUpperCase();
+            codeBox.textContent = lastCode;
+            status.textContent = "تمت قراءة الباركود. راجع الكود ثم اضغط تسجيل الحضور.";
             copyButton.hidden = false;
+            registerButton.hidden = false;
+
             if (running) {
               running = false;
-              try { await scanner.stop(); } catch (e) {}
+              try {
+                await scanner.stop();
+              } catch (e) {}
             }
           },
           () => {}
@@ -96,6 +142,7 @@
 
         running = true;
         status.textContent = "الكاميرا تعمل. وجّهها نحو الباركود.";
+
       } catch (error) {
         running = false;
         status.textContent =
@@ -118,12 +165,35 @@
 
     copyButton.onclick = async () => {
       if (!lastCode) return;
+
       try {
         await navigator.clipboard.writeText(lastCode);
         status.textContent = "تم نسخ الكود: " + lastCode;
       } catch (error) {
         status.textContent = "الكود المقروء: " + lastCode;
       }
+    };
+
+    registerButton.onclick = () => {
+      if (!lastCode || processing) return;
+
+      if (!/^AT\d{4}$/.test(lastCode)) {
+        status.textContent = "الكود غير صحيح. يجب أن يكون مثل AT0001.";
+        return;
+      }
+
+      processing = true;
+      registerButton.disabled = true;
+      status.textContent = "جارٍ فتح نظام الحضور لإرسال الكود...";
+
+      const target = APP_URL + "?code=" + encodeURIComponent(lastCode);
+      window.open(target, "_blank");
+
+      status.textContent =
+        "تم فتح صفحة نتيجة التسجيل في نافذة جديدة. راجع النتيجة هناك.";
+
+      processing = false;
+      registerButton.disabled = false;
     };
   </script>
 </body>
