@@ -268,7 +268,7 @@
         "info"
       );
 
-      const resultTab = window.open(resultUrl, "_blank");
+      const resultTab = window.location.href = resultUrl;
 
       if (resultTab) {
         showStatus(
